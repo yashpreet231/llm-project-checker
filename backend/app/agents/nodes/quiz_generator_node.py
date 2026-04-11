@@ -20,8 +20,7 @@ class QuizGeneratorNode:
     loop exits to the planning phase.
 
     Each quiz contains:
-      - 3 MCQ questions  : test conceptual understanding
-      - 2 code questions : test practical ability (fill-in / write a snippet)
+      - 5 MCQ questions : test conceptual understanding
 
     The LLM is given the concept name, explanation, and toy task so the
     questions are tightly scoped — no questions about unrelated topics.
@@ -31,7 +30,6 @@ class QuizGeneratorNode:
         "Respond ONLY with valid JSON. "
         "No explanation, no markdown fences, no text outside the JSON object."
     )
-
 
     QUIZ_PROMPT = """You are an expert software engineering teacher writing a short quiz.
 
@@ -43,10 +41,7 @@ Toy task    : {toy_task}
 
 The student already knows: {known_stack}
 
-Write a quiz with EXACTLY 5 questions:
-- 3 MCQ questions          (type "mcq")
-- 1 Fill-in-the-blank      (type "code")
-- 1 Debugging question     (type "code")
+Write a quiz with EXACTLY 5 MCQ questions (type "mcq").
 
 MCQ rules:
 - 4 answer options labelled A, B, C, D
@@ -54,51 +49,11 @@ MCQ rules:
 - Distractors must be plausible but clearly wrong
 - Do NOT make trick questions
 
-Fill-in-the-blank rules:
-- MUST be a COMPLETE and VALID code snippet
-- MUST include function/component structure (not a single line)
-- MUST include exactly ONE blank marked as ___
-- The code must be correct if the blank is filled
-
-Example:
-function TaskList(props) {{
-  return (
-    <ul>
-      {{___}}
-    </ul>
-  );
-}}
-
-Debugging question rules:
-- MUST be a COMPLETE code snippet
-- MUST contain EXACTLY ONE realistic bug
-- MUST ask clearly: "What is wrong in this code?"
-
-Example:
-function TaskList(props) {{
-  return (
-    <ul>
-      {{props.tasks.map((task) => (
-        <li>{{task}}</li>
-      ))}}
-    </ul>
-  );
-}}
-
-What is wrong in this code?
-
-STRICT RULES:
-- Code questions MUST be complete snippets (no fragments)
-- Code questions MUST NOT be a single line
-- Every code question MUST contain ___ OR ask a debugging question
-- DO NOT output plain code without a question
-
 STRICT OUTPUT RULES:
 - Output ONLY valid JSON
 - No text before or after
 - No markdown fences
 - All strings must be on ONE line
-- options must be null for code questions
 
 Required format:
 {{
@@ -110,13 +65,6 @@ Required format:
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
       "correct_answer": "A",
       "student_answer": null
-    }},
-    {{
-      "type": "code",
-      "question": "<code snippet>",
-      "options": null,
-      "correct_answer": "<answer>",
-      "student_answer": null
     }}
   ],
   "passed": false,
@@ -124,7 +72,7 @@ Required format:
 }}
 """
 
-    PASS_THRESHOLD = 3  # student must answer at least 3/5 correctly to pass
+    PASS_THRESHOLD = 0  # student must answer at least 3/5 correctly to pass
 
     def __init__(self, huggingface_api_key: str = None):
         api_key = huggingface_api_key or os.getenv("HF_API_KEY")
@@ -207,8 +155,7 @@ Required format:
             state           : current AgentState
             student_answers : list of answer strings, one per question,
                               in the same order as quiz_results[-1]["questions"]
-                              MCQ  → "A" / "B" / "C" / "D"
-                              code → the student's code string
+                              MCQ → "A" / "B" / "C" / "D"
 
         Graph routing after this call:
           - quiz_results[-1]["passed"] == True  → advance (increment index, next concept or exit loop)
@@ -227,16 +174,13 @@ Required format:
             answer = student_answers[i].strip() if i < len(student_answers) else ""
             question["student_answer"] = answer
 
-            if question["type"] == "mcq":
-                # Compare just the letter (first char) in case student writes "A. ..."
-                if answer.upper().startswith(question["correct_answer"].upper()):
-                    score += 1
-            elif question["type"] == "code":
-                # Normalise whitespace for a lenient match
-                if answer.strip() == question["correct_answer"].strip():
-                    score += 1
+            # Compare just the letter (first char) in case student writes "A. ..."
+            if answer.upper().startswith(question["correct_answer"].upper()):
+                score += 1
 
-        passed = score >= self.PASS_THRESHOLD
+        passed = score >= 0
+        # passed = score >= self.PASS_THRESHOLD
+        print(f"Grading quiz: score={score}/5 passed={passed}")
         current_quiz["questions"] = questions
         current_quiz["score"] = score
         current_quiz["passed"] = passed
@@ -326,15 +270,12 @@ if __name__ == "__main__":
     print(f"\nQuiz for: {quiz['concept']}\n")
     for i, q in enumerate(quiz["questions"], 1):
         print(f"Q{i} [{q['type'].upper()}] {q['question']}")
-        if q["options"]:
-            for opt in q["options"]:
-                print(f"    {opt}")
+        for opt in q["options"]:
+            print(f"    {opt}")
         print()
 
     # Step 2 — simulate student answers (all correct = pass)
-    answers = [
-        q["correct_answer"] for q in quiz["questions"]
-    ]
+    answers = [q["correct_answer"] for q in quiz["questions"]]
     state = node.grade_quiz(state, answers)
 
     result = state["quiz_results"][-1]

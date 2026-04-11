@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { runAgent } from "../../api/api";
+import { runAgent } from "../../lib/api";
 
 export default function Page() {
   const [data, setData] = useState(null);
