@@ -1,6 +1,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from app.agents.state import AgentState, Prerequisite
+from app.services.llm import get_llm
 import os
 import json
 import logging
@@ -92,16 +93,9 @@ class PrerequisiteNode:
     ]
     """
 
-    def __init__(self, huggingface_api_key: str = None):
-        api_key = huggingface_api_key or os.getenv("HF_API_KEY")
-        self.llm = ChatHuggingFace(
-            llm=HuggingFaceEndpoint(
-                repo_id=os.getenv("LLM_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
-                huggingfacehub_api_token=api_key,
-                task="text-generation",
-                max_new_tokens=2048,
-            )
-        )
+    def __init__(self):
+        # 🔥 THIS IS THE ONLY CHANGE THAT MATTERS
+        self.llm = get_llm(max_tokens=1024)
 
     def _parse_response(self, raw: str) -> list:
         """Strip markdown fences if the model adds them despite instructions."""
