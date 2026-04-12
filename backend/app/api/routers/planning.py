@@ -106,7 +106,7 @@ def submit_approach(session_id: str, body: SubmitApproachRequest):
     try:
         for event in compiled_graph.stream(
             state,
-            config={"recursion_limit": 10},
+            config={"recursion_limit": 50},
         ):
             node_name, updated = next(iter(event.items()))
             state = updated
