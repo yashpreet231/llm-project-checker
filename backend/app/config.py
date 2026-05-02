@@ -38,3 +38,6 @@ OPENAI_MODEL   = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # ── GitHub ────────────────────────────────────────────────────────────────────
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+# ── Sarvam AI (multilingual voice) ────────────���───────────────────────────────
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")

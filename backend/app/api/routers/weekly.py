@@ -164,6 +164,34 @@ def check_completion(session_id: str):
     )
 
 
+@router.post("/{session_id}/override-complete", response_model=CheckCompletionResponse)
+def override_complete(session_id: str):
+    """
+    Demo/offline override: mark the current week as completed without running
+    the GitHub check. Useful when there is no real repo yet (live demos, or
+    the student is using a sandbox branch the API can't see).
+    """
+    state = store.get(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not state.get("weekly_tasks"):
+        raise HTTPException(status_code=409, detail="No tasks generated yet.")
+
+    state = {
+        **state,
+        "completion_status": True,
+        "completion_reason": "Manually marked complete (demo override).",
+    }
+    store.set(session_id, state)
+
+    return CheckCompletionResponse(
+        week_number=state["current_week"],
+        completed=True,
+        reason=state["completion_reason"],
+        next_step="task_quiz",
+    )
+
+
 @router.get("/{session_id}/quiz", response_model=TaskQuizResponse)
 def get_task_quiz(session_id: str):
     """Generate and return the task quiz for the current week."""
