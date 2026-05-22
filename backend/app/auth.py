@@ -29,6 +29,7 @@ class UserRecord(BaseModel):
     email:      str
     name:       str
     role:       Role
+    roll_no:    str = ""
     created_at: datetime
 
 
@@ -59,6 +60,7 @@ class SignupBody(BaseModel):
     password: str = Field(min_length=6)
     name:     str = Field(min_length=1)
     role:     Role = "student"
+    roll_no:  str = ""
 
 
 class LoginBody(BaseModel):
@@ -86,6 +88,7 @@ def signup(body: SignupBody) -> AuthResponse:
         email=email,
         name=body.name,
         role=body.role,
+        roll_no=body.roll_no.strip(),
         created_at=datetime.utcnow(),
     )
     entry = {"record": record, "salt": salt, "hash": pwd_hash}

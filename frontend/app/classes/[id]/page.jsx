@@ -2076,6 +2076,9 @@ function LectureCard({ classId, lecture, isTeacher, userId, userName, onRefresh 
                   <button type="button" className="tf-btn-outline" style={{ padding: '4px 12px', fontSize: 12 }}
                           onClick={loadSubs}>Refresh</button>
                   <button type="button" className="tf-btn-outline"
+                          style={{ padding: '4px 12px', fontSize: 12, color: 'var(--accent3)', borderColor: 'rgba(16,185,129,0.3)' }}
+                          onClick={() => api.downloadAttendanceExcel(classId, lecture.id, lecture.title)}>⬇ Download Excel</button>
+                  <button type="button" className="tf-btn-outline"
                           style={{ padding: '4px 12px', fontSize: 12, color: 'var(--danger)', borderColor: 'rgba(224,68,68,0.3)' }}
                           onClick={removeLecture}>Delete lecture</button>
                 </div>

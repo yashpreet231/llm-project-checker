@@ -202,10 +202,16 @@ class SummarySubmission(BaseModel):
     summary_text:       str
     submitted_at:       datetime = Field(default_factory=datetime.utcnow)
     # AI grading
-    ai_score:           Optional[int] = None       # 0-10
+    ai_score:           Optional[int] = None       # 0-10 (sum of 5 dimensions)
     ai_feedback:        Optional[str] = None
     concepts_covered:   List[str] = Field(default_factory=list)
     concepts_missed:    List[str] = Field(default_factory=list)
+    # 5-dimension breakdown scores (each 0-2)
+    score_coverage:     Optional[float] = None
+    score_relevance:    Optional[float] = None
+    score_clarity:      Optional[float] = None
+    score_coherence:    Optional[float] = None
+    score_grammar:      Optional[float] = None
     # Attendance decision (None until reviewed; teacher can override AI auto-decision)
     attendance_granted: bool = False
     teacher_override:   Optional[bool] = None
@@ -423,6 +429,7 @@ def _seed_if_empty():
     for s in subs:
         _submissions[s.id] = s
 
+    save_store()
     logger.info("Classroom demo seeded: 2 classes, 3 submissions, 1 teacher, 2 students.")
 
 
@@ -1337,7 +1344,7 @@ def grade_summary_against_transcript(transcript: str, summary: str) -> dict:
 
 
 def create_lecture(classroom_id: str, title: str, transcript: str,
-                   threshold: int = 60, file_name: Optional[str] = None,
+                   threshold: int = 6, file_name: Optional[str] = None,
                    held_at: Optional[datetime] = None) -> Lecture:
     lec = Lecture(
         id=str(uuid.uuid4()),
@@ -1395,6 +1402,7 @@ def submit_summary(lecture_id: str, student_id: str, student_name: str,
         existing.teacher_override = None       # reset if previously overridden
         existing.reviewed_at      = None
         existing.reviewed_by      = None
+        save_store()
         return existing
 
     sub = SummarySubmission(

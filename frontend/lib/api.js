@@ -276,6 +276,21 @@ export const overrideAttendance = (cid, ssid, granted) =>
 export const getAttendanceReport = (cid) =>
   request('GET', `/classes/${cid}/attendance`)
 
+export async function downloadAttendanceExcel(cid, lid, lectureTitle) {
+  const res = await fetch(`${API}/classes/${cid}/lectures/${lid}/attendance-excel`, {
+    method: 'GET',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error('Failed to download attendance sheet')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `attendance_${(lectureTitle || 'lecture').replace(/\s+/g, '_')}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const registerUser = (body) =>
   request('POST', '/auth/register', body)

@@ -9,6 +9,7 @@ from typing import List, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import classroom as cls
@@ -767,7 +768,7 @@ def list_lectures(cid: str, user: UserRecord = Depends(current_user)):
 async def create_lecture(
     cid: str,
     title:     str = Form(...),
-    threshold: int = Form(default=60),
+    threshold: int = Form(default=6),
     held_at:   str = Form(default=""),
     transcript_text: str = Form(default=""),
     file: Optional[UploadFile] = File(default=None),
@@ -870,3 +871,91 @@ def attendance_report(cid: str, user: UserRecord = Depends(current_user)):
     c = _require_classroom(cid)
     _require_owner(c, user)
     return cls.attendance_report(cid)
+
+
+@router.get("/{cid}/lectures/{lid}/attendance-excel",
+            dependencies=[Depends(require_role("teacher"))])
+def download_attendance_excel(cid: str, lid: str,
+                              user: UserRecord = Depends(current_user)):
+    """Download an Excel sheet for a single lecture: name, roll no, remarks, attendance."""
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from fastapi.responses import StreamingResponse
+    from app import auth as authlib
+
+    c = _require_classroom(cid)
+    _require_owner(c, user)
+    lec = cls._lectures.get(lid)
+    if not lec or lec.classroom_id != cid:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    # index submissions by student_id for quick lookup
+    subs_by_student = {
+        s.student_id: s
+        for s in cls._summary_submissions.values()
+        if s.lecture_id == lid
+    }
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Attendance"
+
+    # ── header row ────────────────────────────────────────────────────────────
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="2563EB")  # blue
+    headers = ["#", "Student Name", "Roll No", "Submitted", "AI Score (0-10)",
+               "Remarks", "Attendance"]
+    for col, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.row_dimensions[1].height = 20
+    ws.column_dimensions["A"].width = 5
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 14
+    ws.column_dimensions["E"].width = 18
+    ws.column_dimensions["F"].width = 55
+    ws.column_dimensions["G"].width = 14
+
+    green_fill = PatternFill(fill_type="solid", fgColor="D1FAE5")
+    red_fill   = PatternFill(fill_type="solid", fgColor="FEE2E2")
+
+    # ── one row per enrolled student ─────────────────────────────────────────
+    for row_idx, student_id in enumerate(c.student_ids, start=2):
+        entry   = authlib._users_by_id.get(student_id)
+        name    = entry["record"].name    if entry else student_id
+        roll_no = entry["record"].roll_no if entry else ""
+        sub     = subs_by_student.get(student_id)
+
+        submitted   = sub.submitted_at.strftime("%Y-%m-%d %H:%M") if sub else "—"
+        ai_score    = sub.ai_score    if sub else None
+        remarks     = sub.ai_feedback if sub else "No submission"
+        granted     = sub.attendance_granted if sub else False
+        attend_text = "Present" if granted else "Absent"
+        row_fill    = green_fill if granted else red_fill
+
+        values = [row_idx - 1, name, roll_no, submitted,
+                  ai_score, remarks, attend_text]
+        for col, val in enumerate(values, start=1):
+            cell = ws.cell(row=row_idx, column=col, value=val)
+            cell.fill = row_fill
+            cell.alignment = Alignment(wrap_text=(col == 6), vertical="top")
+
+    # freeze the header row
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    safe_title = lec.title.replace(" ", "_").replace("/", "-")[:60]
+    filename = f"attendance_{safe_title}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
